@@ -28,7 +28,7 @@ WIRELESS_RECEIVER_PIDS = {
 EXCLUDED_KEYWORDS = {
     'keyboard', 'mouse', 'trackpad', 'touchpad', 'sensor',
     'hid-compliant', 'device', 'headset', 'microphone',
-    'usb input', 'generic usb', 'composite device'
+    'usb input', 'generic usb', 'composite device', "usb receiver", 'webcam', 'camera',
 }
 
 

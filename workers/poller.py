@@ -16,7 +16,7 @@ class ControllerPoller(QThread):
     def __init__(self):
         super().__init__()
         self.battery_provider = get_battery_provider()
-        self.last_controllers = []
+        self.last_controllers = None  # None to force first update
         self.battery_executor = ThreadPoolExecutor(max_workers=4)
 
     def run(self):
@@ -76,6 +76,10 @@ class ControllerPoller(QThread):
 
     def _controllers_changed(self, controllers):
         """Check if controller list has changed."""
+        # Force first update
+        if self.last_controllers is None:
+            return True
+            
         if len(controllers) != len(self.last_controllers):
             return True
         
