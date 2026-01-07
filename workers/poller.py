@@ -99,10 +99,12 @@ class ControllerPoller(QThread):
         return mapping.get(type_string, ControllerType.UNKNOWN)
 
     def _detect_connection_type(self, device):
-        """Detect if controller is USB or Bluetooth based on device path."""
-        path = device.get("path", "").lower()
-        if "bluetooth" in path or "#bth#" in path:
-            return ConnectionType.BLUETOOTH
-        elif "usb" in path:
-            return ConnectionType.USB
+        """Detect if controller is USB or Bluetooth.
+        
+        For XInput controllers, we cannot reliably determine the connection type
+        from the API, so we return UNKNOWN. Future enhancement could use
+        Windows Device Manager queries to determine the actual connection type.
+        """
+        # XInput doesn't expose connection type information
+        # Could be enhanced using WMI/Windows Device Manager queries
         return ConnectionType.UNKNOWN
