@@ -59,14 +59,17 @@ class WindowsBatteryProvider(BatteryProvider):
             for idx in indices:
                 try:
                     info = XINPUT_BATTERY_INFORMATION()
+                    logger.debug(f"Checking XInput battery for idx {info}")
                     # devType 0x00 = BATTERY_DEVTYPE_GAMEPAD
                     res = func(ctypes.c_uint(idx), ctypes.c_ubyte(0x00), ctypes.byref(info))
                     # 0 == ERROR_SUCCESS
                     if res == 0:
-                        battery_percent = self._charge_level_to_percent(info.BatteryLevel)
-                        logger.debug(f"XInput battery for idx {idx}: {battery_percent}%")
-                        if battery_percent is not None:
-                            return battery_percent
+                        logger.debug(f"XInput battery info for idx {idx}: Type={info.BatteryType}, Level={info.BatteryLevel}")
+                        return info.BatteryLevel
+                        # battery_percent = self._charge_level_to_percent(info.BatteryLevel)
+                        # logger.debug(f"XInput battery for idx {idx}: {battery_percent}%")
+                        # if battery_percent is not None:
+                        #     return battery_percent
                 except Exception as e:
                     logger.debug(f"XInput battery check failed for idx {idx}: {e}")
                     continue

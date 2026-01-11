@@ -4,6 +4,8 @@ from PyQt5.QtCore import Qt
 import sys
 import logging
 from models.controller import ControllerType, ConnectionType
+from ui.events_window import ControllerEventsWindow
+from workers.input_monitor import InputMonitor
 
 logger = logging.getLogger("gamepad_manager")
 
@@ -14,6 +16,7 @@ class TrayIcon(QSystemTrayIcon):
         self.menu = QMenu()
         self.setContextMenu(self.menu)
         self.controllers = []
+        self.events_windows = {}  # Track open events windows
 
     def update_controllers(self, controllers):
         """Update tray menu with current controllers and their status."""
@@ -55,8 +58,10 @@ class TrayIcon(QSystemTrayIcon):
 
         label += f" ({connection_icon})"
 
+        # Make the action clickable to open events window
         action = self.menu.addAction(label)
-        action.setEnabled(False)  # Make it non-clickable
+        controller_index = len([c for c in self.controllers[:self.controllers.index(controller) + 1] if c == controller]) - 1
+        action.triggered.connect(lambda: self.open_events_window(controller, controller_index))
         
         return action
 
@@ -97,4 +102,38 @@ class TrayIcon(QSystemTrayIcon):
         if battery_level is None:
             return "N/A"
         return f"{battery_level}%"
+    
+    def open_events_window(self, controller, controller_index):
+        """Open the events window for the specified controller."""
+        logger.info(f"Opening events window for controller: {controller.name}")
+        
+        # Create a unique key for this controller
+        controller_key = f"{controller.name}_{controller_index}"
+        
+        # Check if window already exists
+        if controller_key in self.events_windows:
+            window = self.events_windows[controller_key]
+            if window.isVisible():
+                # Window is already open, just bring it to front
+                window.activateWindow()
+                window.raise_()
+                return
+            else:
+                # Window was closed, remove it
+                del self.events_windows[controller_key]
+        
+        # Create new input monitor and events window
+        input_monitor = InputMonitor(controller_index)
+        events_window = ControllerEventsWindow(controller, input_monitor)
+        
+        # Store reference to prevent garbage collection
+        self.events_windows[controller_key] = events_window
+        
+        # Show the window
+        events_window.show()
+        
+        # Clean up when window is closed
+        events_window.destroyed.connect(
+            lambda: self.events_windows.pop(controller_key, None)
+        )
 
