@@ -2,6 +2,17 @@
 
 A system tray application for monitoring wireless game controller battery levels on Windows.
 
+## Features
+
+- **Real-time Controller Monitoring**: Automatically detects connected controllers (Xbox, PlayStation, Nintendo, etc.)
+- **Battery Status**: Shows battery levels for wireless controllers in the system tray
+- **Controller Events Viewer**: Click on any controller to open a detailed events window showing:
+  - Button presses and releases
+  - Analog stick movements (left/right stick)
+  - Trigger positions (LT/RT)
+  - D-pad input
+  - Real-time visual indicators for all inputs
+
 ## Project Structure
 
 ```
@@ -10,6 +21,8 @@ app/
 ├── tray/
 │   ├── tray_icon.py
 │   └── menu_builder.py
+├── ui/
+│   └── events_window.py
 ├── controllers/
 │   ├── base.py
 │   ├── xbox.py
@@ -21,7 +34,8 @@ app/
 │   ├── linux.py
 │   └── macos.py
 ├── workers/
-│   └── poller.py
+│   ├── poller.py
+│   └── input_monitor.py
 └── models/
     └── controller.py
 ```
@@ -39,6 +53,19 @@ pip install -r requirements.txt
 ```bash
 python main.py
 ```
+
+## Usage
+
+1. Run the application - it will appear in the system tray
+2. Connected controllers will be listed in the tray menu with their battery status
+3. Click on any controller to open the **Events Viewer** window
+4. In the Events Viewer:
+   - Click "Start Monitoring" to begin capturing controller inputs
+   - View real-time button presses, stick movements, and trigger positions
+   - See visual indicators for all analog inputs
+   - Monitor the events log for detailed input history
+   - Click "Clear Log" to reset the events display
+   - Click "Stop Monitoring" when done
 
 ## Troubleshooting
 

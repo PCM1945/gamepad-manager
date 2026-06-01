@@ -10,6 +10,7 @@ WIRELESS_GAMEPAD_VENDORS = {
     0x0E8F: "GreenAsia",      # GreenAsia wireless
     0x1532: "Razer",          # Razer wireless
     0x2563: "SteelSeries",    # SteelSeries
+    0x3537: "GameSir",        # GameSir wireless
 }
 
 # Common 2.4GHz wireless receiver product IDs (subset of known ones)
@@ -47,7 +48,11 @@ def _is_gaming_controller(name, vid, pid):
     # Check if vendor is a known wireless gamepad vendor
     if vid in WIRELESS_GAMEPAD_VENDORS:
         # Additional check: name should suggest it's a controller
-        gaming_keywords = {'controller', 'gamepad', 'receiver', 'wireless', 'adapter', 'joystick', 'game'}
+        gaming_keywords = {'controller', 'gamepad',
+                            'receiver', 'wireless',
+                            'adapter', 'joystick',
+                            'game', 'gamesir',
+                            'controller (xbox 360 for windows)'}
         if any(keyword in name_lower for keyword in gaming_keywords):
             return True
         # Xbox and PlayStation devices without these keywords are likely real controllers
@@ -69,9 +74,15 @@ def detect_controllers():
         if isinstance(path, bytes):
             path = path.decode('utf-8')
         
+        # DEBUG: Print all devices
+        print(f"[DEBUG] Device: VID=0x{vid:04X}, PID=0x{pid:04X}, Name='{name}'")
+        
         # Filter: only include gaming controllers and wireless receivers
         if not _is_gaming_controller(name, vid, pid):
+            print(f"  → Filtrado (não é gaming controller)")
             continue
+        
+        print(f"  → ✓ Detectado!")
 
         ctype = WIRELESS_GAMEPAD_VENDORS.get(vid, "Unknown")
 
