@@ -4,11 +4,13 @@ class ControllerType(Enum):
     XBOX = "Xbox"
     PLAYSTATION = "PlayStation"
     NINTENDO = "Nintendo"
+    GAMESIR = "GameSir"
     UNKNOWN = "Unknown"
 
 class ConnectionType(Enum):
     USB = "USB"
     BLUETOOTH = "Bluetooth"
+    DONGLE = "Dongle"
     UNKNOWN = "Unknown"
 
 class Controller:

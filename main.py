@@ -39,7 +39,9 @@ logger.info("=== Gamepad Manager Started ===")
 
 try:
     app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
     logger.info("PyQt5 Application initialized")
+    logger.info("Application configured to keep running in tray when windows close")
 
     # Handle icon path for both development and PyInstaller builds
     if getattr(sys, 'frozen', False):

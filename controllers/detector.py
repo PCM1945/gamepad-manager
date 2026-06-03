@@ -23,6 +23,9 @@ WIRELESS_RECEIVER_PIDS = {
     0xC21F,  # F710 Gamepad
     0xC219,  # F510 Gamepad
     0xC21D,  # F310 Gamepad
+    # gamesir wireless receivers
+    0x1098, # GameSir T4 nova 2 lite Receiver
+    0x1040, # GameSir T4 nova lite Receiver
 }
 
 # Keywords to filter OUT (non-gaming devices)

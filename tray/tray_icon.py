@@ -71,6 +71,7 @@ class TrayIcon(QSystemTrayIcon):
             ControllerType.XBOX: "🎮",
             ControllerType.PLAYSTATION: "🎮",
             ControllerType.NINTENDO: "🎮",
+            ControllerType.GAMESIR: "🎮",
             ControllerType.UNKNOWN: "❓",
         }
         return type_map.get(controller_type, "❓")
@@ -80,6 +81,7 @@ class TrayIcon(QSystemTrayIcon):
         conn_map = {
             ConnectionType.USB: "USB",
             ConnectionType.BLUETOOTH: "BT",
+            ConnectionType.DONGLE: "Dongle",
             ConnectionType.UNKNOWN: "?",
         }
         return conn_map.get(connection_type, "?")
