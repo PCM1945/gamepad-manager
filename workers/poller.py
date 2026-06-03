@@ -69,8 +69,8 @@ class ControllerPoller(QThread):
                     # No battery provider, create controller without battery
                     controller = Controller(
                         name=device["name"],
-                        ctype=self._parse_controller_type(device["type"]),
-                        connection=self._detect_connection_type(device),
+                        ctype=device["type"],
+                        connection=device["connection"],
                         battery=None
                     )
                     controllers.append(controller)
@@ -85,7 +85,7 @@ class ControllerPoller(QThread):
                 controller = Controller(
                     name=device["name"],
                     ctype=self._parse_controller_type(device["type"]),
-                    connection=self._detect_connection_type(device),
+                    connection=device["connection"],
                     battery=battery
                 )
                 controllers.append(controller)
@@ -123,12 +123,3 @@ class ControllerPoller(QThread):
             "GameSir": ControllerType.GAMESIR,
         }
         return mapping.get(type_string, ControllerType.UNKNOWN)
-
-    def _detect_connection_type(self, device):
-        """Detect if controller is USB or Bluetooth based on device path."""
-        path = device.get("path", "").lower()
-        if "bluetooth" in path or "#bth#" in path:
-            return ConnectionType.BLUETOOTH
-        elif "usb" in path:
-            return ConnectionType.USB
-        return ConnectionType.UNKNOWN

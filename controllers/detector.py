@@ -1,4 +1,8 @@
 import hid as hidapi
+import logging
+from models.controller import ConnectionType
+
+logger = logging.getLogger("gamepad_manager")
 
 # Classe responsável por detectar os controladores conectados e obter suas informações, incluindo o nível de bateria, se disponível. Ele roda em uma thread separada para não bloquear a interface do usuário. O resultado é emitido através de um sinal para que a interface possa ser atualizada.
 # O poller verifica periodicamente (a cada 2 segundos) se houve mudanças nos controladores detectados e só emite um sinal de atualização se houver alguma mudança, para evitar atualizações desnecessárias na interface. Ele também lida com possíveis erros durante a detecção e obtenção de informações dos controladores, garantindo que o aplicativo continue funcionando mesmo que haja problemas com algum dispositivo.
@@ -43,6 +47,10 @@ def _is_gaming_controller(name, vid, pid):
     """Check if device is a gaming controller/receiver."""
     if not name:
         return False
+
+    # Known receiver VID/PID pairs should always be treated as gaming devices.
+    if vid in WIRELESS_GAMEPAD_VENDORS and pid in WIRELESS_RECEIVER_PIDS:
+        return True
     
     name_lower = name.lower()
     
@@ -66,7 +74,28 @@ def _is_gaming_controller(name, vid, pid):
             return True
     
     return False
+def _get_connection_type(device):
+    """Detect if controller is USB, Bluetooth or dongle based on device path or product ID."""
+    #print(f"[DEBUG] Detecting connection type for device pid: {device.get('pid')}")
+    path = device.get("path", "")
+    # hidapi.enumerate() returns vendor_id/product_id keys.
+    pid = device.get("product_id", device.get("pid"))
+    vid = device.get("vendor_id", device.get("vid"))
 
+    if isinstance(path, bytes):
+        path = path.decode("utf-8", errors="ignore")
+    path = path.lower()
+
+    if vid in WIRELESS_GAMEPAD_VENDORS and pid in WIRELESS_RECEIVER_PIDS:
+        logger.debug(f"Detected known wireless receiver: VID=0x{vid:04X}, PID=0x{pid:04X}")
+        return ConnectionType.DONGLE
+    
+    if "bluetooth" in path or "#bth#" in path:
+        return ConnectionType.BLUETOOTH
+    if "usb" in path:
+        return ConnectionType.USB
+    
+    return ConnectionType.UNKNOWN
 
 def detect_controllers():
     devices = []
@@ -75,20 +104,21 @@ def detect_controllers():
         pid = d["product_id"]
         name = d.get("product_string") or "Unknown Controller"
         path = d["path"]
+        connection = _get_connection_type(d)
         
         # Convert bytes to string if necessary
         if isinstance(path, bytes):
             path = path.decode('utf-8')
         
         # DEBUG: Print all devices
-        print(f"[DEBUG] Device: VID=0x{vid:04X}, PID=0x{pid:04X}, Name='{name}'")
+        #print(f"[DEBUG] Device: VID=0x{vid:04X}, PID=0x{pid:04X}, Name='{name}'")
         
         # Filter: only include gaming controllers and wireless receivers
         if not _is_gaming_controller(name, vid, pid):
-            print(f"  → Filtrado (não é gaming controller)")
+            #logger.debug(f"  → Filtrado (não é gaming controller)")
             continue
         
-        print(f"  → ✓ Detectado!")
+        #logger.debug(f"  → ✓ Detectado!")
 
         ctype = WIRELESS_GAMEPAD_VENDORS.get(vid, "Unknown")
 
@@ -98,6 +128,7 @@ def detect_controllers():
             "pid": pid,
             "path": path,
             "type": ctype,
+            "connection": connection
         })
 
     return devices
