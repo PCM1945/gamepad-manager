@@ -9,6 +9,27 @@ from plat import get_battery_provider
 
 logger = logging.getLogger("gamepad_manager")
 
+#   Classe responsável por detectar os controladores conectados e obter suas informações,
+# incluindo o nível de bateria, se disponível. Ele roda em uma thread separada para não
+# bloquear a interface do usuário. O resultado é emitido através de um sinal para que
+# a interface possa ser atualizada.
+#   O poller verifica periodicamente (a cada 2 segundos) se houve mudanças nos controladores
+# detectados e só emite um sinal de atualização se houver alguma mudança, para evitar 
+# atualizações desnecessárias na interface. Ele também lida com possíveis erros durante
+# a detecção e obtenção de informações dos controladores, garantindo que o aplicativo
+# continue funcionando mesmo que haja problemas com algum dispositivo.
+#   O uso de um ThreadPoolExecutor para obter as informações de bateria permite que o
+# processo seja mais eficiente, especialmente se houver vários controladores conectados,
+# já que as consultas de bateria podem ser feitas em paralelo.
+#   O método _parse_controller_type converte a string de tipo do detector para o enum
+#   ControllerType usado na aplicação, enquanto o método _detect_connection_type tenta
+# determinar se o controlador está conectado via USB ou Bluetooth com base no caminho
+# do dispositivo.
+#   O resultado final é uma lista de objetos Controller, cada um contendo o nome,
+#  tipo, método de conexão e nível de bateria (se disponível) do controlador, que é
+#  então emitida para a interface atualizar a exibição dos controladores conectados.
+
+
 
 class ControllerPoller(QThread):
     updated = pyqtSignal(list)
@@ -99,6 +120,7 @@ class ControllerPoller(QThread):
             "Xbox": ControllerType.XBOX,
             "PlayStation": ControllerType.PLAYSTATION,
             "Nintendo": ControllerType.NINTENDO,
+            "GameSir": ControllerType.GAMESIR,
         }
         return mapping.get(type_string, ControllerType.UNKNOWN)
 

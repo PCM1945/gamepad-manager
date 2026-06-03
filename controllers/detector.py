@@ -1,5 +1,8 @@
 import hid as hidapi
 
+# Classe responsável por detectar os controladores conectados e obter suas informações, incluindo o nível de bateria, se disponível. Ele roda em uma thread separada para não bloquear a interface do usuário. O resultado é emitido através de um sinal para que a interface possa ser atualizada.
+# O poller verifica periodicamente (a cada 2 segundos) se houve mudanças nos controladores detectados e só emite um sinal de atualização se houver alguma mudança, para evitar atualizações desnecessárias na interface. Ele também lida com possíveis erros durante a detecção e obtenção de informações dos controladores, garantindo que o aplicativo continue funcionando mesmo que haja problemas com algum dispositivo.
+
 # Vendor IDs for wireless game controllers and 2.4GHz receivers
 WIRELESS_GAMEPAD_VENDORS = {
     0x045E: "Xbox",           # Microsoft (Xbox wireless)
@@ -16,16 +19,16 @@ WIRELESS_GAMEPAD_VENDORS = {
 # Common 2.4GHz wireless receiver product IDs (subset of known ones)
 WIRELESS_RECEIVER_PIDS = {
     # Xbox wireless receivers
-    0x02EA,  # Xbox 360 Wireless Receiver
-    0x02DD,  # Xbox One Wireless Adapter
-    0x02FE,  # Xbox One S Wireless Adapter
+    0x02EA: "Xbox 360 Wireless Receiver",  # Xbox 360 Wireless Receiver
+    0x02DD: "Xbox One Wireless Adapter",  # Xbox One Wireless Adapter
+    0x02FE: "Xbox One S Wireless Adapter",  # Xbox One S Wireless Adapter
     # Logitech wireless receivers
-    0xC21F,  # F710 Gamepad
-    0xC219,  # F510 Gamepad
-    0xC21D,  # F310 Gamepad
+    0xC21F: "F710 Gamepad",  # F710 Gamepad
+    0xC219: "F510 Gamepad",  # F510 Gamepad
+    0xC21D: "F310 Gamepad",  # F310 Gamepad
     # gamesir wireless receivers
-    0x1098, # GameSir T4 nova 2 lite Receiver
-    0x1040, # GameSir T4 nova lite Receiver
+    0x1098: "GameSir T4 nova 2 lite Receiver", # GameSir T4 nova 2 lite Receiver
+    0x1040: "GameSir T4 nova lite Receiver", # GameSir T4 nova lite Receiver
 }
 
 # Keywords to filter OUT (non-gaming devices)
