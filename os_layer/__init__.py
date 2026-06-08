@@ -1,5 +1,5 @@
 import sys
-from platform.windows import WindowsBatteryProvider
+from os_layer.windows import WindowsBatteryProvider
 from models.controller import Controller, ControllerType, ConnectionType
 
 
