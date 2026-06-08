@@ -5,7 +5,7 @@ from threading import Thread
 from concurrent.futures import ThreadPoolExecutor
 from controllers.detector import detect_controllers
 from models.controller import Controller, ControllerType, ConnectionType
-from plat import get_battery_provider
+from platform import get_battery_provider
 
 logger = logging.getLogger("gamepad_manager")
 

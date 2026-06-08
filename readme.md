@@ -24,10 +24,7 @@ app/
 ├── ui/
 │   └── events_window.py
 ├── controllers/
-│   ├── base.py
-│   ├── xbox.py
-│   ├── playstation.py
-│   ├── nintendo.py
+│   ├── batteryprovider.py
 │   └── detector.py
 ├── platform/
 │   ├── windows.py
@@ -52,6 +49,31 @@ pip install -r requirements.txt
 
 ```bash
 python main.py
+```
+
+## Build Executable (PyInstaller)
+
+1. Install PyInstaller:
+```bash
+pip install pyinstaller
+```
+
+2. Build using the existing spec file:
+```bash
+pyinstaller main.spec
+```
+
+3. The generated executable will be available in:
+- `dist/main/main.exe`
+
+4. (Optional) Build directly from `main.py` without the spec file:
+```bash
+pyinstaller --name gamepad-manager --noconfirm --windowed main.py
+```
+
+5. To remove previous build artifacts before rebuilding:
+```bash
+rmdir /s /q build dist
 ```
 
 ## Usage
