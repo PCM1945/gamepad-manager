@@ -47,16 +47,17 @@ class TrayIcon(QSystemTrayIcon):
         # Build the label
         type_icon = self._get_type_emoji(controller.type)
         connection_icon = self._get_connection_icon(controller.connection)
-        battery_str = self._format_battery(controller.battery)
+        battery_percent = self._normalize_battery_percent(controller.battery)
+        battery_str = self._format_battery(battery_percent)
 
-        label = f"{type_icon} {controller.name}"
-        if controller.battery is not None:
-            battery_icon = self._get_battery_icon(controller.battery)
-            label += f" {battery_icon} {battery_str}"
-        else:
-            label += " 🔋 N/A"
+        battery_icon = self._get_battery_icon(battery_percent)
+        # Put battery info before controller name so it's visible even with long names.
+        label = f"{type_icon} {battery_icon} BAT: {battery_str} | {controller.name} ({connection_icon})"
 
-        label += f" ({connection_icon})"
+        logger.debug(
+            f"Tray label battery diagnostics: name={controller.name}, "
+            f"raw={controller.battery}, normalized={battery_percent}, label='{label}'"
+        )
 
         # Make the action clickable to open events window
         action = self.menu.addAction(label)
@@ -104,6 +105,26 @@ class TrayIcon(QSystemTrayIcon):
         if battery_level is None:
             return "N/A"
         return f"{battery_level}%"
+
+    def _normalize_battery_percent(self, battery_level):
+        """Normalize battery level to 0-100 when possible."""
+        if battery_level is None:
+            return None
+
+        try:
+            value = int(battery_level)
+        except (TypeError, ValueError):
+            return None
+
+        # Backward compatibility if provider still returns XInput levels (0..3).
+        if 0 <= value <= 3:
+            level_map = {0: 10, 1: 33, 2: 66, 3: 100}
+            return level_map.get(value)
+
+        if 0 <= value <= 100:
+            return value
+
+        return None
     
     def open_events_window(self, controller, controller_index):
         """Open the events window for the specified controller."""

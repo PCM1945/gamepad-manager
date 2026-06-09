@@ -74,11 +74,13 @@ def _is_gaming_controller(name, vid, pid):
 
 def _get_connection_type(device):
     """Detect if controller is USB, Bluetooth or dongle based on device path or product ID."""
-    #print(f"[DEBUG] Detecting connection type for device pid: {device.get('pid')}")
     path = device.get("path", "")
+    name = (device.get("product_string") or "").lower()
     # hidapi.enumerate() returns vendor_id/product_id keys.
     pid = device.get("product_id", device.get("pid"))
     vid = device.get("vendor_id", device.get("vid"))
+
+    print(f"[DEBUG] _get_connection_type: name='{name}', vid=0x{vid:04X}, pid=0x{pid:04X}, path='{path}'")
 
     if isinstance(path, bytes):
         path = path.decode("utf-8", errors="ignore")
@@ -87,12 +89,23 @@ def _get_connection_type(device):
     if vid in WIRELESS_GAMEPAD_VENDORS and pid in WIRELESS_RECEIVER_PIDS:
         logger.debug(f"Detected known wireless receiver: VID=0x{vid:04X}, PID=0x{pid:04X}")
         return ConnectionType.DONGLE
-    
+
+    # Bluetooth markers in Windows HID paths and product names.
     if "bluetooth" in path or "#bth#" in path:
         return ConnectionType.BLUETOOTH
-    if "usb" in path:
+
+    # Generic wireless receiver naming conventions.
+    if any(k in name for k in ("receiver", "dongle", "wireless adapter", "2.4g", "2.4ghz")):
+        return ConnectionType.DONGLE
+
+    # Windows HID paths often don't include the literal word 'usb'.
+    if "usb" in path or "hid#" in path or "vid_" in path:
         return ConnectionType.USB
-    
+
+    # If it's a known gamepad vendor and not Bluetooth, prefer Dongle over Unknown.
+    if vid in WIRELESS_GAMEPAD_VENDORS:
+        return ConnectionType.DONGLE
+
     return ConnectionType.UNKNOWN
 
 def detect_controllers():

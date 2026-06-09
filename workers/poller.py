@@ -39,6 +39,8 @@ class ControllerPoller(QThread):
         self.battery_provider = get_battery_provider()
         self.last_controllers = None  # None to force first update
         self.battery_executor = ThreadPoolExecutor(max_workers=4)
+        provider_name = type(self.battery_provider).__name__ if self.battery_provider else "None"
+        logger.info(f"Battery diagnostics: provider={provider_name}")
 
     def run(self):
         while True:
@@ -56,31 +58,49 @@ class ControllerPoller(QThread):
         try:
             detected = detect_controllers()
             controllers = []
+            logger.debug(f"Battery diagnostics: detected {len(detected)} controller candidate(s)")
 
             # Get batteries asynchronously
             battery_futures = {}
-            for device in detected:
+            for scan_index, device in enumerate(detected):
+                indexed_device = dict(device)
+                indexed_device["index"] = scan_index % 4
+                logger.debug(
+                    "Battery diagnostics: device "
+                    f"name={indexed_device.get('name')} vid=0x{indexed_device.get('vid', 0):04X} "
+                    f"pid=0x{indexed_device.get('pid', 0):04X} connection={indexed_device.get('connection')} "
+                    f"xinput_index_hint={indexed_device.get('index')}"
+                )
                 if self.battery_provider:
                     future = self.battery_executor.submit(
-                        self.battery_provider.get_battery, device
+                        self.battery_provider.get_battery, indexed_device
                     )
-                    battery_futures[id(device)] = (device, future)
+                    battery_futures[id(indexed_device)] = (indexed_device, future)
                 else:
                     # No battery provider, create controller without battery
                     controller = Controller(
-                        name=device["name"],
-                        ctype=device["type"],
-                        connection=device["connection"],
+                        name=indexed_device["name"],
+                        ctype=self._parse_controller_type(indexed_device["type"]),
+                        connection=indexed_device["connection"],
                         battery=None
                     )
                     controllers.append(controller)
+                    logger.debug(
+                        f"Battery diagnostics: no provider, defaulting battery=None for {indexed_device.get('name')}"
+                    )
 
             # Collect battery results
             for device_id, (device, future) in battery_futures.items():
                 try:
                     battery = future.result(timeout=1.0)  # 1 second timeout per device
-                except Exception:
+                    logger.debug(
+                        f"Battery diagnostics: provider result for {device.get('name')} -> {battery}"
+                    )
+                except Exception as e:
                     battery = None
+                    logger.warning(
+                        f"Battery diagnostics: provider failed for {device.get('name')}: {e}"
+                    )
 
                 controller = Controller(
                     name=device["name"],
@@ -89,6 +109,14 @@ class ControllerPoller(QThread):
                     battery=battery
                 )
                 controllers.append(controller)
+
+            logger.debug(
+                "Battery diagnostics: final controllers="
+                + ", ".join(
+                    f"{c.name}(type={c.type.value}, conn={c.connection.value}, battery={c.battery})"
+                    for c in controllers
+                )
+            )
 
             return controllers
         except Exception as e:

@@ -47,33 +47,69 @@ class WindowsBatteryProvider(BatteryProvider):
         """
         try:
             if not self._xinput:
+                logger.debug("Battery diagnostics: XInput unavailable (no DLL loaded)")
                 return None
 
-            xlib, XINPUT_BATTERY_INFORMATION, func = self._xinput
+            _, XINPUT_BATTERY_INFORMATION, func = self._xinput
 
             # If caller provided an `index` (0-3), try it first.
             preferred = controller.get("index") if isinstance(controller, dict) else None
             indices = [preferred] if preferred is not None else []
             indices += [i for i in range(4) if i not in indices]
+            logger.debug(
+                "Battery diagnostics: querying XInput "
+                f"controller={controller.get('name') if isinstance(controller, dict) else controller} "
+                f"preferred_idx={preferred} scan_order={indices}"
+            )
 
             for idx in indices:
                 try:
                     info = XINPUT_BATTERY_INFORMATION()
-                    logger.debug(f"Checking XInput battery for idx {info}")
+                    logger.debug(f"Checking XInput battery for idx {idx}")
                     # devType 0x00 = BATTERY_DEVTYPE_GAMEPAD
                     res = func(ctypes.c_uint(idx), ctypes.c_ubyte(0x00), ctypes.byref(info))
                     # 0 == ERROR_SUCCESS
                     if res == 0:
-                        logger.debug(f"XInput battery info for idx {idx}: Type={info.BatteryType}, Level={info.BatteryLevel}")
-                        return info.BatteryLevel
-                        # battery_percent = self._charge_level_to_percent(info.BatteryLevel)
-                        # logger.debug(f"XInput battery for idx {idx}: {battery_percent}%")
-                        # if battery_percent is not None:
-                        #     return battery_percent
+                        logger.debug(
+                            f"XInput battery info for idx {idx}: "
+                            f"Type={info.BatteryType}, Level={info.BatteryLevel}"
+                        )
+
+                        battery_type = int(info.BatteryType)
+                        battery_level = int(info.BatteryLevel)
+
+                        # 0x00=DISCONNECTED, 0xFF=UNKNOWN
+                        if battery_type in (0x00, 0xFF):
+                            logger.debug(
+                                f"Battery diagnostics: idx {idx} skipped (type={battery_type}, level={battery_level})"
+                            )
+                            continue
+
+                        # 0x01=WIRED has no battery to report.
+                        if battery_type == 0x01:
+                            logger.debug(
+                                f"Battery diagnostics: idx {idx} wired controller (no battery telemetry)"
+                            )
+                            # Do not return here. Another XInput slot may still be the
+                            # wireless controller we are trying to resolve.
+                            continue
+
+                        battery_percent = self._charge_level_to_percent(battery_level)
+                        if battery_percent is not None:
+                            logger.debug(
+                                f"Battery diagnostics: idx {idx} mapped level={battery_level} -> {battery_percent}%"
+                            )
+                            return battery_percent
+                        logger.debug(
+                            f"Battery diagnostics: idx {idx} unrecognized level={battery_level}"
+                        )
+                    else:
+                        logger.debug(f"Battery diagnostics: idx {idx} XInput call returned error={res}")
                 except Exception as e:
                     logger.debug(f"XInput battery check failed for idx {idx}: {e}")
                     continue
 
+            logger.debug("Battery diagnostics: no battery data from any XInput slot")
             return None
         except Exception as e:
             logger.error(f"Error getting battery from XInput: {e}", exc_info=True)
@@ -82,7 +118,7 @@ class WindowsBatteryProvider(BatteryProvider):
     def _charge_level_to_percent(self, charge_level) -> int | None:
         """Convert XInput battery level to percentage."""
         try:
-            level_map = {0: 10, 1: 30, 2: 65, 3: 100}
+            level_map = {0: 10, 1: 33, 2: 66, 3: 100}
             return level_map.get(int(charge_level), None)
         except Exception as e:
             logger.debug(f"Error converting charge level: {e}")
