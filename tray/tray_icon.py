@@ -4,7 +4,7 @@ from PyQt5.QtCore import Qt
 import sys
 import logging
 from models.controller import ControllerType, ConnectionType
-from ui.events_window import ControllerEventsWindow
+from ui.controller_events_window import ControllerEventsWindow
 from workers.input_monitor import InputMonitor
 
 logger = logging.getLogger("gamepad_manager")

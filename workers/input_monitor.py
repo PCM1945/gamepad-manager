@@ -1,7 +1,8 @@
-from PyQt5.QtCore import QThread, pyqtSignal, QTimer
+from PyQt5.QtCore import QThread, pyqtSignal
 import logging
 import time
 import threading
+import math
 
 logger = logging.getLogger("gamepad_manager")
 
@@ -15,6 +16,8 @@ except ImportError:
 
 class InputMonitor(QThread):
     """Monitor controller inputs and emit events."""
+
+    STICK_DEADZONE = 0.15
     
     event_received = pyqtSignal(str)  # Emits event description
     state_updated = pyqtSignal(dict)  # Emits current input state
@@ -23,6 +26,7 @@ class InputMonitor(QThread):
         super().__init__()
         self.controller_index = controller_index
         self.running = False
+        self._axis_modes = {}  # axis code -> "signed" | "unsigned"
         self._current_state = {
             "buttons": set(),
             "left_stick": (0, 0),
@@ -166,11 +170,13 @@ class InputMonitor(QThread):
         # Left stick (ABS_X, ABS_Y)
         left_x = axes.get("ABS_X", 0)
         left_y = axes.get("ABS_Y", 0)
+        left_x, left_y = self._apply_radial_deadzone(left_x, left_y, self.STICK_DEADZONE)
         self._current_state["left_stick"] = (left_x, left_y)
         
         # Right stick (ABS_RX, ABS_RY)
         right_x = axes.get("ABS_RX", 0)
         right_y = axes.get("ABS_RY", 0)
+        right_x, right_y = self._apply_radial_deadzone(right_x, right_y, self.STICK_DEADZONE)
         self._current_state["right_stick"] = (right_x, right_y)
         
         # Triggers (ABS_Z, ABS_RZ)
@@ -181,22 +187,63 @@ class InputMonitor(QThread):
         """Normalize axis values to -1.0 to 1.0 range."""
         # Triggers (0-255) -> (0-1)
         if code in ["ABS_Z", "ABS_RZ"]:
-            return value / 255.0
+            return max(0.0, min(1.0, value / 255.0))
         
-        # Sticks (0-65535, center at 32768) -> (-1.0 to 1.0)
+        # Sticks can come as either signed (-32768..32767) or unsigned (0..65535).
+        # Normalize both formats to a common -1.0..1.0 range.
         elif code in ["ABS_X", "ABS_Y", "ABS_RX", "ABS_RY"]:
-            # Center at 0, normalize to -1.0 to 1.0
-            normalized = (value - 32768) / 32768.0
-            # Apply deadzone
-            if abs(normalized) < 0.1:
-                return 0.0
-            return normalized
+            mode = self._detect_axis_mode(code, value)
+
+            if mode == "unsigned":
+                normalized = (value - 32768.0) / 32768.0
+            else:
+                # Signed axis range (-32768..32767)
+                if value < 0:
+                    normalized = value / 32768.0
+                else:
+                    normalized = value / 32767.0 if value else 0.0
+
+            return max(-1.0, min(1.0, normalized))
         
         # D-pad (-1, 0, 1) -> keep as is
         elif code in ["ABS_HAT0X", "ABS_HAT0Y"]:
             return float(value)
         
         return float(value)
+
+    def _detect_axis_mode(self, code, value):
+        """Detect if an axis is signed (-32768..32767) or unsigned (0..65535)."""
+        cached_mode = self._axis_modes.get(code)
+        if cached_mode:
+            return cached_mode
+
+        # Any negative value guarantees signed mode.
+        if value < 0:
+            self._axis_modes[code] = "signed"
+            return "signed"
+
+        # Values above signed max guarantee unsigned mode.
+        if value > 32767:
+            self._axis_modes[code] = "unsigned"
+            return "unsigned"
+
+        # Ambiguous values (0..32767): default to signed.
+        # This avoids collapsing signed-positive half into one side.
+        self._axis_modes[code] = "signed"
+        return "signed"
+
+    def _apply_radial_deadzone(self, x, y, deadzone):
+        """Apply radial deadzone while preserving stick angle and full output range."""
+        magnitude = math.sqrt((x * x) + (y * y))
+        if magnitude <= deadzone:
+            return 0.0, 0.0
+
+        # Re-scale the remaining range so movement still reaches full scale at the edge.
+        scaled_magnitude = (magnitude - deadzone) / (1.0 - deadzone)
+        scaled_magnitude = max(0.0, min(1.0, scaled_magnitude))
+
+        factor = scaled_magnitude / magnitude
+        return x * factor, y * factor
     
     def _get_axis_name(self, code):
         """Get human-readable axis name."""
