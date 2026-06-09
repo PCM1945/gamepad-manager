@@ -50,7 +50,7 @@ def _is_gaming_controller(name, vid, pid):
 
     # Known receiver VID/PID pairs should always be treated as gaming devices.
     if vid in WIRELESS_GAMEPAD_VENDORS and pid in WIRELESS_RECEIVER_PIDS:
-        logger.debug(f"Device VID=0x{vid:04X}, PID=0x{pid:04X} is a known wireless receiver, including as gaming device")
+        print(f"Device VID=0x{vid:04X}, PID=0x{pid:04X} is a known wireless receiver, including as gaming device")
         return True
     
     name_lower = name.lower()
@@ -80,18 +80,16 @@ def _get_connection_type(device):
     pid = device.get("product_id", device.get("pid"))
     vid = device.get("vendor_id", device.get("vid"))
 
-    print(f"[DEBUG] _get_connection_type: name='{name}', vid=0x{vid:04X}, pid=0x{pid:04X}, path='{path}'")
-
     if isinstance(path, bytes):
         path = path.decode("utf-8", errors="ignore")
     path = path.lower()
 
     if vid in WIRELESS_GAMEPAD_VENDORS and pid in WIRELESS_RECEIVER_PIDS:
-        logger.debug(f"Detected known wireless receiver: VID=0x{vid:04X}, PID=0x{pid:04X}")
+        print(f"Detected known wireless receiver: VID=0x{vid:04X}, PID=0x{pid:04X}")
         return ConnectionType.DONGLE
 
     # Bluetooth markers in Windows HID paths and product names.
-    if "bluetooth" in path or "#bth#" in path:
+    if "bluetooth" in path or "#bth#" in path or "hid#{" in path:
         return ConnectionType.BLUETOOTH
 
     # Generic wireless receiver naming conventions.
@@ -99,7 +97,7 @@ def _get_connection_type(device):
         return ConnectionType.DONGLE
 
     # Windows HID paths often don't include the literal word 'usb'.
-    if "usb" in path or "hid#" in path or "vid_" in path:
+    if "usb" in path or "hid#vid_" in path:
         return ConnectionType.USB
 
     # If it's a known gamepad vendor and not Bluetooth, prefer Dongle over Unknown.
@@ -122,14 +120,13 @@ def detect_controllers():
             path = path.decode('utf-8')
         
         # DEBUG: Print all devices
-        #print(f"[DEBUG] Device: VID=0x{vid:04X}, PID=0x{pid:04X}, Name='{name}'")
-        
+        print(f"[DEBUG] Device: VID=0x{vid:04X}, PID=0x{pid:04X}, Name='{name}'")
         # Filter: only include gaming controllers and wireless receivers
         if not _is_gaming_controller(name, vid, pid):
-            #logger.debug(f"  → Filtrado (não é gaming controller)")
+            print(f"  → Filtrado (não é gaming controller)")
             continue
-        
-        #logger.debug(f"  → ✓ Detectado!")
+        print(f"device: {d}")
+        print(f"  → ✓ Detectado!")
 
         ctype = WIRELESS_GAMEPAD_VENDORS.get(vid, "Unknown")
 
