@@ -50,6 +50,7 @@ def _is_gaming_controller(name, vid, pid):
 
     # Known receiver VID/PID pairs should always be treated as gaming devices.
     if vid in WIRELESS_GAMEPAD_VENDORS and pid in WIRELESS_RECEIVER_PIDS:
+        logger.debug(f"Device VID=0x{vid:04X}, PID=0x{pid:04X} is a known wireless receiver, including as gaming device")
         return True
     
     name_lower = name.lower()
@@ -68,12 +69,9 @@ def _is_gaming_controller(name, vid, pid):
                             'game', 'gamesir',
                             'controller (xbox 360 for windows)'}
         if any(keyword in name_lower for keyword in gaming_keywords):
-            return True
-        # Xbox and PlayStation devices without these keywords are likely real controllers
-        if vid in (0x045E, 0x054C, 0x057E):
-            return True
-    
+            return True    
     return False
+
 def _get_connection_type(device):
     """Detect if controller is USB, Bluetooth or dongle based on device path or product ID."""
     #print(f"[DEBUG] Detecting connection type for device pid: {device.get('pid')}")
