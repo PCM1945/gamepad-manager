@@ -7,25 +7,64 @@ import math
 logger = logging.getLogger("gamepad_manager")
 
 try:
-    from inputs import UnpluggedError, devices
-    INPUTS_AVAILABLE = True
-except ImportError:
-    INPUTS_AVAILABLE = False
-    logger.warning("inputs library not available - controller input monitoring will be disabled")
-
-try:
     import pygame
     PYGAME_AVAILABLE = True
 except ImportError:
     PYGAME_AVAILABLE = False
     pygame = None
-    logger.warning("pygame library not available - fallback controller monitoring disabled")
+    logger.warning("pygame library not available - controller input monitoring disabled")
 
 
 class InputMonitor(QThread):
     """Monitor controller inputs and emit events."""
 
     STICK_DEADZONE = 0.15
+    _pygame_guard = threading.Lock()
+    _pygame_users = 0
+    _claimed_joystick_indices = set()
+    BUTTON_MAPS = {
+        "xbox": {
+            0: "A",
+            1: "B",
+            2: "X",
+            3: "Y",
+            4: "LB",
+            5: "RB",
+            6: "Back",
+            7: "Start",
+            8: "L3",
+            9: "R3",
+            10: "Xbox",
+        },
+        "playstation": {
+            0: "Cross",
+            1: "Circle",
+            2: "Square",
+            3: "Triangle",
+            4: "L1",
+            5: "R1",
+            6: "Share",
+            7: "Options",
+            8: "L3",
+            9: "R3",
+            10: "PS",
+            11: "Touchpad",
+        },
+        "nintendo": {
+            0: "B",
+            1: "A",
+            2: "Y",
+            3: "X",
+            4: "L",
+            5: "R",
+            6: "Minus",
+            7: "Plus",
+            8: "L3",
+            9: "R3",
+            10: "Home",
+            11: "Capture",
+        },
+    }
     
     event_received = pyqtSignal(str)  # Emits event description
     state_updated = pyqtSignal(dict)  # Emits current input state
@@ -36,19 +75,22 @@ class InputMonitor(QThread):
         self.controller_name = controller_name or ""
         self.controller_type = (controller_type or "").lower()
         self.running = False
-        self._axis_modes = {}  # axis code -> "signed" | "unsigned"
         self._current_state = {
             "buttons": set(),
             "left_stick": (0, 0),
             "right_stick": (0, 0),
             "left_trigger": 0,
             "right_trigger": 0,
-            "axes": {}
         }
-        self._state_timer = None
+        self._active_joystick = None
+        self._active_joystick_index = None
         
     def run(self):
         """Main monitoring loop."""
+        if not PYGAME_AVAILABLE:
+            self.event_received.emit("ERROR: pygame-ce/pygame not installed")
+            return
+
         try:
             self.running = True
             self.event_received.emit("Monitoring started - move controller to see events...")
@@ -59,32 +101,12 @@ class InputMonitor(QThread):
 
             # Start state update timer in a separate thread
             self._start_state_updates()
-
-            # Prefer inputs backend when index is available there.
-            if INPUTS_AVAILABLE:
-                try:
-                    self.event_received.emit(f"Found {len(devices.gamepads)} gamepad(s)")
-                    logger.info(f"Monitoring gamepad (inputs backend): {devices.gamepads}")
-                    target_gamepad = self._get_target_gamepad()
-                    if target_gamepad is not None:
-                        self._run_inputs_backend()
-                        return
-                except Exception as e:
-                    logger.warning(f"inputs backend unavailable: {e}")
-
-            # Fallback for controllers not exposed by inputs (common with PlayStation on Windows).
-            if PYGAME_AVAILABLE:
-                self.event_received.emit("inputs não encontrou esse controle; usando fallback pygame...")
-                self._run_pygame_backend()
-                return
-
-            self.event_received.emit("ERROR: Controle não disponível em inputs e pygame não está instalado")
-            logger.error("No usable backend for controller monitoring")
-            self.running = False
+            self._run_pygame_backend()
         except Exception as e:
             logger.error(f"Error in input monitor: {e}", exc_info=True)
             self.event_received.emit(f"ERROR: {str(e)}")
         finally:
+            self._release_joystick()
             logger.info("Input monitor thread stopped")
     
     def _start_state_updates(self):
@@ -97,66 +119,20 @@ class InputMonitor(QThread):
         update_thread = threading.Thread(target=update_loop, daemon=True)
         update_thread.start()
 
-    def _get_target_gamepad(self):
-        """Get the gamepad object that matches this monitor index."""
-        gamepads = devices.gamepads
-        if not gamepads or self.controller_index < 0:
-            return None
-
-        if self.controller_index >= len(gamepads):
-            return None
-
-        return gamepads[self.controller_index]
-
-    def _run_inputs_backend(self):
-        """Read events from inputs for a specific indexed gamepad."""
-        while self.running:
-            try:
-                target_gamepad = self._get_target_gamepad()
-                if target_gamepad is None:
-                    self.event_received.emit("Controller disconnected!")
-                    logger.warning("No gamepad available for selected index")
-                    self.running = False
-                    break
-
-                # Blocking read from the selected gamepad only.
-                events = target_gamepad.read()
-                if not self.running:
-                    break
-
-                for event in events:
-                    if not self.running:
-                        break
-                    self._process_event(event)
-
-            except UnpluggedError:
-                self.event_received.emit("Controller disconnected!")
-                logger.warning("Controller unplugged during monitoring")
-                self.running = False
-                break
-            except OSError as e:
-                logger.error(f"OSError in gamepad reading: {e}")
-                self.event_received.emit("Controller connection lost!")
-                self.running = False
-                break
-            except Exception as e:
-                if self.running:
-                    logger.error(f"Error getting gamepad events: {e}")
-                    time.sleep(0.1)
-
     def _run_pygame_backend(self):
-        """Fallback backend using pygame joystick APIs."""
-        pygame.init()
-        pygame.joystick.init()
+        """Controller monitoring using pygame joystick APIs."""
+        self._acquire_pygame()
 
         joy = self._select_pygame_joystick()
         if joy is None:
-            self.event_received.emit("ERROR: pygame não encontrou joysticks disponíveis")
+            self.event_received.emit("ERROR: pygame nao encontrou joysticks disponiveis")
             self.running = False
             return
 
-        self.event_received.emit(f"Fallback ativo: {joy.get_name()}")
-        logger.info(f"pygame fallback monitoring joystick: {joy.get_name()}")
+        self._active_joystick = joy
+        self.event_received.emit(f"Found {pygame.joystick.get_count()} joystick(s)")
+        self.event_received.emit(f"Monitoring via pygame: {joy.get_name()}")
+        logger.info(f"Monitoring joystick via pygame: {joy.get_name()}")
 
         last_axes = {}
         last_buttons = set()
@@ -172,6 +148,10 @@ class InputMonitor(QThread):
             left_y = joy.get_axis(1) if axes_count > 1 else 0.0
             right_x = joy.get_axis(2) if axes_count > 2 else 0.0
             right_y = joy.get_axis(3) if axes_count > 3 else 0.0
+
+            # pygame/SDL reports Y positive-down; normalize to cartesian positive-up.
+            left_y = -left_y
+            right_y = -right_y
 
             # Triggers are usually axis 4/5 in SDL for DS4/DS5.
             lt_raw = joy.get_axis(4) if axes_count > 4 else -1.0
@@ -205,18 +185,59 @@ class InputMonitor(QThread):
 
             current_buttons = {idx for idx in range(buttons_count) if joy.get_button(idx)}
             for pressed in sorted(current_buttons - last_buttons):
-                self.event_received.emit(f"Button {pressed} pressed")
+                self.event_received.emit(f"Button {self._button_name(pressed)} pressed")
             for released in sorted(last_buttons - current_buttons):
-                self.event_received.emit(f"Button {released} released")
+                self.event_received.emit(f"Button {self._button_name(released)} released")
             last_buttons = current_buttons
 
-            self._current_state["buttons"] = {f"B{idx}" for idx in current_buttons}
+            self._current_state["buttons"] = {self._button_name(idx) for idx in current_buttons}
             time.sleep(0.01)
 
-        try:
-            joy.quit()
-        except Exception:
-            pass
+    def _button_name(self, button_index):
+        """Map pygame button index to a platform-specific display name."""
+        ctype = self.controller_type
+        if "playstation" in ctype:
+            mapping = self.BUTTON_MAPS["playstation"]
+        elif "nintendo" in ctype:
+            mapping = self.BUTTON_MAPS["nintendo"]
+        elif "xbox" in ctype:
+            mapping = self.BUTTON_MAPS["xbox"]
+        else:
+            # Controllers with Xbox-like layouts (e.g. many generic pads) look
+            # better with Xbox labels than numeric IDs.
+            mapping = self.BUTTON_MAPS["xbox"]
+
+        return mapping.get(button_index, f"B{button_index}")
+
+    def _acquire_pygame(self):
+        """Initialize pygame once for all monitor threads."""
+        with self._pygame_guard:
+            if self._pygame_users == 0:
+                pygame.init()
+                pygame.joystick.init()
+            self.__class__._pygame_users += 1
+
+    def _release_joystick(self):
+        """Release joystick and shutdown pygame when the last monitor stops."""
+        if self._active_joystick is not None:
+            try:
+                self._active_joystick.quit()
+            except Exception:
+                pass
+            self._active_joystick = None
+
+        with self._pygame_guard:
+            if self._active_joystick_index is not None:
+                self._claimed_joystick_indices.discard(self._active_joystick_index)
+                self._active_joystick_index = None
+            if self._pygame_users > 0:
+                self.__class__._pygame_users -= 1
+            if self._pygame_users == 0 and PYGAME_AVAILABLE:
+                try:
+                    pygame.joystick.quit()
+                    pygame.quit()
+                except Exception:
+                    pass
 
     def _select_pygame_joystick(self):
         """Pick the best matching pygame joystick for this monitor."""
@@ -230,64 +251,71 @@ class InputMonitor(QThread):
             j.init()
             joysticks.append((idx, j, (j.get_name() or "").lower()))
 
-        # If this window is for PlayStation, prioritize PS-like device names.
-        if "playstation" in self.controller_type or "sony" in self.controller_name.lower():
-            for _, j, name in joysticks:
-                if any(k in name for k in ("playstation", "dualshock", "dualsense", "wireless controller", "sony")):
-                    return j
+        def claim_if_available(idx, joystick_obj):
+            with self._pygame_guard:
+                if idx in self._claimed_joystick_indices:
+                    return None
+                self._claimed_joystick_indices.add(idx)
+                self._active_joystick_index = idx
+                return joystick_obj
 
-        # Exact index mapping when possible.
-        for idx, j, _ in joysticks:
-            if idx == self.controller_index:
-                return j
+        def type_matches(name_lower):
+            if "playstation" in self.controller_type:
+                return any(k in name_lower for k in ("ps4", "ps5", "playstation", "dualshock", "dualsense", "wireless controller", "sony"))
+            if "nintendo" in self.controller_type:
+                return any(k in name_lower for k in ("nintendo", "switch", "joy-con", "pro controller"))
+            if "xbox" in self.controller_type:
+                return any(k in name_lower for k in ("xbox", "x-box", "360 for windows"))
+            return False
 
-        # Fallback by controller name similarity.
+        # For PlayStation/Nintendo, type matching is more reliable than tray index.
+        if any(k in self.controller_type for k in ("playstation", "nintendo")):
+            for idx, j, name in joysticks:
+                if type_matches(name):
+                    claimed = claim_if_available(idx, j)
+                    if claimed is not None:
+                        logger.info(f"Joystick selected by type: idx={idx} name={j.get_name()} type={self.controller_type}")
+                        return claimed
+
+        # 1) Match by controller name first. This is the most stable signal
+        # when tray ordering and pygame ordering diverge.
         expected = self.controller_name.lower().strip()
         if expected:
-            for _, j, name in joysticks:
+            for idx, j, name in joysticks:
                 if expected in name or name in expected:
-                    return j
+                    claimed = claim_if_available(idx, j)
+                    if claimed is not None:
+                        logger.info(f"Joystick selected by name: idx={idx} name={j.get_name()}")
+                        return claimed
 
-        return joysticks[0][1]
-    
-    def _process_event(self, event):
-        """Process an input event."""
-        try:
-            event_type = event.ev_type
-            code = event.code
-            value = event.state
-            
-            # Button events
-            if event_type == "Key":
-                button_name = self._get_button_name(code)
-                if value == 1:  # Button pressed
-                    self._current_state["buttons"].add(button_name)
-                    self.event_received.emit(f"Button {button_name} pressed")
-                elif value == 0:  # Button released
-                    self._current_state["buttons"].discard(button_name)
-                    self.event_received.emit(f"Button {button_name} released")
-            
-            # Axis events (analog sticks, triggers)
-            elif event_type == "Absolute":
-                axis_name = self._get_axis_name(code)
-                normalized_value = self._normalize_axis_value(code, value)
-                
-                # Store raw axis value
-                self._current_state["axes"][code] = normalized_value
-                
-                # Update stick/trigger states
-                self._update_analog_states()
-                
-                # Only log significant movements
-                if abs(normalized_value) > 0.1 or code in ["ABS_Z", "ABS_RZ"]:  # Triggers always log
-                    self.event_received.emit(f"{axis_name}: {normalized_value:.2f}")
-            
-            # D-pad events
-            elif event_type == "Sync":
-                pass  # Sync events are just markers, ignore them
-                
-        except Exception as e:
-            logger.error(f"Error processing event: {e}")
+        # 2) Exact index mapping when name matching did not resolve.
+        for idx, j, _ in joysticks:
+            if idx == self.controller_index:
+                claimed = claim_if_available(idx, j)
+                if claimed is not None:
+                    logger.info(f"Joystick selected by index: idx={idx} name={j.get_name()}")
+                    return claimed
+
+        # 3) For PlayStation windows, then prefer PS-like names.
+        if "playstation" in self.controller_type or "sony" in self.controller_name.lower():
+            for idx, j, name in joysticks:
+                if any(k in name for k in ("playstation", "dualshock", "dualsense", "wireless controller", "sony")):
+                    claimed = claim_if_available(idx, j)
+                    if claimed is not None:
+                        logger.info(f"Joystick selected by PS fallback: idx={idx} name={j.get_name()}")
+                        return claimed
+
+        # 4) First non-claimed joystick.
+        for idx, j, _ in joysticks:
+            claimed = claim_if_available(idx, j)
+            if claimed is not None:
+                logger.info(f"Joystick selected by first-free: idx={idx} name={j.get_name()}")
+                return claimed
+
+        # 5) If everything is claimed, keep the previous behavior as last resort.
+        idx, j, _ = joysticks[0]
+        self._active_joystick_index = idx
+        return j
     
     def _emit_current_state(self):
         """Emit current state to UI."""
@@ -303,75 +331,6 @@ class InputMonitor(QThread):
         except Exception as e:
             logger.error(f"Error emitting state: {e}")
     
-    def _update_analog_states(self):
-        """Update stick and trigger states from raw axis values."""
-        axes = self._current_state["axes"]
-        
-        # Left stick (ABS_X, ABS_Y)
-        left_x = axes.get("ABS_X", 0)
-        left_y = axes.get("ABS_Y", 0)
-        left_x, left_y = self._apply_radial_deadzone(left_x, left_y, self.STICK_DEADZONE)
-        self._current_state["left_stick"] = (left_x, left_y)
-        
-        # Right stick (ABS_RX, ABS_RY)
-        right_x = axes.get("ABS_RX", 0)
-        right_y = axes.get("ABS_RY", 0)
-        right_x, right_y = self._apply_radial_deadzone(right_x, right_y, self.STICK_DEADZONE)
-        self._current_state["right_stick"] = (right_x, right_y)
-        
-        # Triggers (ABS_Z, ABS_RZ)
-        self._current_state["left_trigger"] = axes.get("ABS_Z", 0)
-        self._current_state["right_trigger"] = axes.get("ABS_RZ", 0)
-    
-    def _normalize_axis_value(self, code, value):
-        """Normalize axis values to -1.0 to 1.0 range."""
-        # Triggers (0-255) -> (0-1)
-        if code in ["ABS_Z", "ABS_RZ"]:
-            return max(0.0, min(1.0, value / 255.0))
-        
-        # Sticks can come as either signed (-32768..32767) or unsigned (0..65535).
-        # Normalize both formats to a common -1.0..1.0 range.
-        elif code in ["ABS_X", "ABS_Y", "ABS_RX", "ABS_RY"]:
-            mode = self._detect_axis_mode(code, value)
-
-            if mode == "unsigned":
-                normalized = (value - 32768.0) / 32768.0
-            else:
-                # Signed axis range (-32768..32767)
-                if value < 0:
-                    normalized = value / 32768.0
-                else:
-                    normalized = value / 32767.0 if value else 0.0
-
-            return max(-1.0, min(1.0, normalized))
-        
-        # D-pad (-1, 0, 1) -> keep as is
-        elif code in ["ABS_HAT0X", "ABS_HAT0Y"]:
-            return float(value)
-        
-        return float(value)
-
-    def _detect_axis_mode(self, code, value):
-        """Detect if an axis is signed (-32768..32767) or unsigned (0..65535)."""
-        cached_mode = self._axis_modes.get(code)
-        if cached_mode:
-            return cached_mode
-
-        # Any negative value guarantees signed mode.
-        if value < 0:
-            self._axis_modes[code] = "signed"
-            return "signed"
-
-        # Values above signed max guarantee unsigned mode.
-        if value > 32767:
-            self._axis_modes[code] = "unsigned"
-            return "unsigned"
-
-        # Ambiguous values (0..32767): default to signed.
-        # This avoids collapsing signed-positive half into one side.
-        self._axis_modes[code] = "signed"
-        return "signed"
-
     def _apply_radial_deadzone(self, x, y, deadzone):
         """Apply radial deadzone while preserving stick angle and full output range."""
         magnitude = math.sqrt((x * x) + (y * y))
@@ -384,37 +343,6 @@ class InputMonitor(QThread):
 
         factor = scaled_magnitude / magnitude
         return x * factor, y * factor
-    
-    def _get_axis_name(self, code):
-        """Get human-readable axis name."""
-        axis_map = {
-            "ABS_X": "Left Stick X",
-            "ABS_Y": "Left Stick Y",
-            "ABS_RX": "Right Stick X",
-            "ABS_RY": "Right Stick Y",
-            "ABS_Z": "Left Trigger",
-            "ABS_RZ": "Right Trigger",
-            "ABS_HAT0X": "D-pad X",
-            "ABS_HAT0Y": "D-pad Y"
-        }
-        return axis_map.get(code, code)
-    
-    def _get_button_name(self, code):
-        """Get human-readable button name (Xbox controller mapping)."""
-        button_map = {
-            "BTN_SOUTH": "A",
-            "BTN_EAST": "B",
-            "BTN_WEST": "X",
-            "BTN_NORTH": "Y",
-            "BTN_TL": "LB",
-            "BTN_TR": "RB",
-            "BTN_SELECT": "Back",
-            "BTN_START": "Start",
-            "BTN_MODE": "Xbox",
-            "BTN_THUMBL": "L3",
-            "BTN_THUMBR": "R3"
-        }
-        return button_map.get(code, code)
     
     def stop(self):
         """Stop the monitoring loop."""

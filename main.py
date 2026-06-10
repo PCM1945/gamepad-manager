@@ -5,8 +5,6 @@ import logging
 import traceback
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QIcon
-from tray.tray_icon import TrayIcon
-from workers.poller import ControllerPoller
 
 # Setup logging
 log_dir = os.path.expanduser("~")
@@ -15,14 +13,16 @@ log_file = os.path.join(log_dir, "gamepad_manager.log")
 # Configure logger
 logger = logging.getLogger("gamepad_manager")
 logger.setLevel(logging.DEBUG)
+logger.handlers.clear()
+logger.propagate = False
 
 # File handler - logs everything
 file_handler = logging.FileHandler(log_file, encoding='utf-8')
 file_handler.setLevel(logging.DEBUG)
 
-# Console handler - only logs warnings and errors
+# Console handler - show runtime diagnostics in terminal
 console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.WARNING)
+console_handler.setLevel(logging.INFO)
 
 # Formatter
 formatter = logging.Formatter(
@@ -38,6 +38,10 @@ logger.addHandler(console_handler)
 logger.info("=== Gamepad Manager Started ===")
 
 try:
+    # Import app modules only after logging is configured.
+    from tray.tray_icon import TrayIcon
+    from workers.poller import ControllerPoller
+
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     logger.info("PyQt5 Application initialized")

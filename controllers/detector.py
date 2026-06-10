@@ -142,18 +142,17 @@ def detect_controllers():
             path = path.decode('utf-8')
         
         # DEBUG: Print all devices
-        #print(f"[DEBUG] Device: VID=0x{vid:04X}, PID=0x{pid:04X}, Name='{name}'")
+        logger.debug(f"Device: VID=0x{vid:04X}, PID=0x{pid:04X}, Name='{name}'")
 
         if _is_virtual_receiver_device(name, vid, pid):
-            print("  → Filtrado (dispositivo virtual do receiver)")
+            logger.debug("Filtered virtual receiver endpoint")
             continue
 
         # Filter: only include gaming controllers and wireless receivers
         if not _is_gaming_controller(name, vid, pid):
-            print(f"  → Filtrado (não é gaming controller)")
+            logger.debug("Filtered non-gaming HID device")
             continue
-       # print(f"device: {d}")
-        print(f"  → ✓ Detectado!")
+        logger.info(f"Detected controller: {name} (VID=0x{vid:04X}, PID=0x{pid:04X})")
 
         ctype = WIRELESS_GAMEPAD_VENDORS.get(vid, "Unknown")
 
