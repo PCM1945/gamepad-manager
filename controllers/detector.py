@@ -43,15 +43,33 @@ EXCLUDED_KEYWORDS = {
 }
 
 
+def _is_virtual_receiver_device(name, vid, pid):
+    """Ignore HID/XInput bridge entries exposed by 2.4GHz receivers."""
+    if not name:
+        return False
+
+    name_lower = name.lower()
+    is_known_receiver = vid in WIRELESS_GAMEPAD_VENDORS and pid in WIRELESS_RECEIVER_PIDS
+    if not is_known_receiver:
+        return False
+
+    # Third-party dongles often expose a transport endpoint like
+    # "XBOX 360 For Windows" (without the "Controller (...)" wrapper).
+    if (
+        "xbox 360 for windows" in name_lower
+        and vid != 0x045E
+        and "controller (xbox 360 for windows)" not in name_lower
+    ):
+        return True
+
+    # Receiver/adapters are transport devices, not the physical controller itself.
+    return any(k in name_lower for k in ("receiver", "wireless adapter", "dongle"))
+
+
 def _is_gaming_controller(name, vid, pid):
     """Check if device is a gaming controller/receiver."""
     if not name:
         return False
-
-    # Known receiver VID/PID pairs should always be treated as gaming devices.
-    if vid in WIRELESS_GAMEPAD_VENDORS and pid in WIRELESS_RECEIVER_PIDS:
-        print(f"Device VID=0x{vid:04X}, PID=0x{pid:04X} is a known wireless receiver, including as gaming device")
-        return True
     
     name_lower = name.lower()
     
@@ -63,11 +81,15 @@ def _is_gaming_controller(name, vid, pid):
     # Check if vendor is a known wireless gamepad vendor
     if vid in WIRELESS_GAMEPAD_VENDORS:
         # Additional check: name should suggest it's a controller
-        gaming_keywords = {'controller', 'gamepad',
-                            'receiver', 'wireless',
-                            'adapter', 'joystick',
-                            'game', 'gamesir',
-                            'controller (xbox 360 for windows)'}
+        gaming_keywords = {
+            'controller',
+            'gamepad',
+            'joystick',
+            'xbox',
+            'playstation',
+            'nintendo',
+            'gamesir',
+        }
         if any(keyword in name_lower for keyword in gaming_keywords):
             return True    
     return False
@@ -121,6 +143,11 @@ def detect_controllers():
         
         # DEBUG: Print all devices
         print(f"[DEBUG] Device: VID=0x{vid:04X}, PID=0x{pid:04X}, Name='{name}'")
+
+        if _is_virtual_receiver_device(name, vid, pid):
+            print("  → Filtrado (dispositivo virtual do receiver)")
+            continue
+
         # Filter: only include gaming controllers and wireless receivers
         if not _is_gaming_controller(name, vid, pid):
             print(f"  → Filtrado (não é gaming controller)")
