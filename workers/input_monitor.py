@@ -261,7 +261,12 @@ class InputMonitor(QThread):
 
         def type_matches(name_lower):
             if "playstation" in self.controller_type:
-                return any(k in name_lower for k in ("ps4", "ps5", "playstation", "dualshock", "dualsense", "wireless controller", "sony"))
+                if any(k in name_lower for k in ("ps4", "ps5", "playstation", "dualshock", "dualsense", "sony")):
+                    return True
+                # DS4/DS5 often appears as exactly "Wireless Controller" on Windows.
+                return "wireless controller" in name_lower and not any(
+                    k in name_lower for k in ("xbox", "nintendo", "switch")
+                )
             if "nintendo" in self.controller_type:
                 return any(k in name_lower for k in ("nintendo", "switch", "joy-con", "pro controller"))
             if "xbox" in self.controller_type:
@@ -299,7 +304,9 @@ class InputMonitor(QThread):
         # 3) For PlayStation windows, then prefer PS-like names.
         if "playstation" in self.controller_type or "sony" in self.controller_name.lower():
             for idx, j, name in joysticks:
-                if any(k in name for k in ("playstation", "dualshock", "dualsense", "wireless controller", "sony")):
+                if any(k in name for k in ("playstation", "dualshock", "dualsense", "sony", "ps4", "ps5")) or (
+                    "wireless controller" in name and not any(k in name for k in ("xbox", "nintendo", "switch"))
+                ):
                     claimed = claim_if_available(idx, j)
                     if claimed is not None:
                         logger.info(f"Joystick selected by PS fallback: idx={idx} name={j.get_name()}")
