@@ -55,13 +55,13 @@ class InputMonitor(QThread):
             1: "A",
             2: "Y",
             3: "X",
-            4: "L",
-            5: "R",
-            6: "Minus",
-            7: "Plus",
-            8: "L3",
-            9: "R3",
-            10: "Home",
+            4: "Minus",
+            5: "HOME",
+            6: "Plus",
+            7: "Left Stick",
+            8: "Right Stick",
+            9: "L",
+            10: "R",
             11: "Capture",
         },
     }
@@ -185,9 +185,9 @@ class InputMonitor(QThread):
 
             current_buttons = {idx for idx in range(buttons_count) if joy.get_button(idx)}
             for pressed in sorted(current_buttons - last_buttons):
-                self.event_received.emit(f"Button {self._button_name(pressed)} pressed")
-            for released in sorted(last_buttons - current_buttons):
-                self.event_received.emit(f"Button {self._button_name(released)} released")
+                self.event_received.emit(f"Button {pressed}-{self._button_name(pressed)} pressed")
+            #for released in sorted(last_buttons - current_buttons):
+                #self.event_received.emit(f"Button {released}-{self._button_name(released)} released")
             last_buttons = current_buttons
 
             self._current_state["buttons"] = {self._button_name(idx) for idx in current_buttons}
