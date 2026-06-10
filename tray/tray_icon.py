@@ -29,9 +29,10 @@ class TrayIcon(QSystemTrayIcon):
             self.menu.addAction("No controllers detected")
             logger.info("No controllers detected")
         else:
-            for c in controllers:
-                self._add_controller_action(c)
+            for idx, c in enumerate(controllers):
+                self._add_controller_action(c, idx)
             logger.info(f"Displayed {len(controllers)} controller(s) in tray menu")
+            print(f"{c}, {idx}")
 
         self.menu.addSeparator()
         
@@ -42,7 +43,7 @@ class TrayIcon(QSystemTrayIcon):
         self.menu.addSeparator()
         self.menu.addAction("Exit", lambda: sys.exit(0))
 
-    def _add_controller_action(self, controller):
+    def _add_controller_action(self, controller, controller_index):
         """Add a menu action for a single controller with formatted info."""
         # Build the label
         type_icon = self._get_type_emoji(controller.type)
@@ -61,7 +62,6 @@ class TrayIcon(QSystemTrayIcon):
 
         # Make the action clickable to open events window
         action = self.menu.addAction(label)
-        controller_index = len([c for c in self.controllers[:self.controllers.index(controller) + 1] if c == controller]) - 1
         action.triggered.connect(lambda: self.open_events_window(controller, controller_index))
         
         return action

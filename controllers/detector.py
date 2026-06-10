@@ -107,7 +107,7 @@ def _get_connection_type(device):
     path = path.lower()
 
     if vid in WIRELESS_GAMEPAD_VENDORS and pid in WIRELESS_RECEIVER_PIDS:
-        print(f"Detected known wireless receiver: VID=0x{vid:04X}, PID=0x{pid:04X}")
+        #print(f"Detected known wireless receiver: VID=0x{vid:04X}, PID=0x{pid:04X}")
         return ConnectionType.DONGLE
 
     # Bluetooth markers in Windows HID paths and product names.
@@ -142,7 +142,7 @@ def detect_controllers():
             path = path.decode('utf-8')
         
         # DEBUG: Print all devices
-        print(f"[DEBUG] Device: VID=0x{vid:04X}, PID=0x{pid:04X}, Name='{name}'")
+        #print(f"[DEBUG] Device: VID=0x{vid:04X}, PID=0x{pid:04X}, Name='{name}'")
 
         if _is_virtual_receiver_device(name, vid, pid):
             print("  → Filtrado (dispositivo virtual do receiver)")
@@ -152,7 +152,7 @@ def detect_controllers():
         if not _is_gaming_controller(name, vid, pid):
             print(f"  → Filtrado (não é gaming controller)")
             continue
-        print(f"device: {d}")
+       # print(f"device: {d}")
         print(f"  → ✓ Detectado!")
 
         ctype = WIRELESS_GAMEPAD_VENDORS.get(vid, "Unknown")

@@ -7,7 +7,7 @@ import math
 logger = logging.getLogger("gamepad_manager")
 
 try:
-    from inputs import get_gamepad, UnpluggedError, devices
+    from inputs import UnpluggedError, devices
     INPUTS_AVAILABLE = True
 except ImportError:
     INPUTS_AVAILABLE = False
@@ -49,7 +49,7 @@ class InputMonitor(QThread):
                 self.event_received.emit("ERROR: No gamepads detected")
                 logger.warning("No gamepads found")
                 return
-            
+
             self.event_received.emit(f"Found {len(devices.gamepads)} gamepad(s)")
             logger.info(f"Monitoring gamepad: {devices.gamepads}")
         except Exception as e:
@@ -61,23 +61,30 @@ class InputMonitor(QThread):
             self.running = True
             self.event_received.emit("Monitoring started - move controller to see events...")
             logger.info("Input monitor thread started")
-            
+
             # Start state update timer in a separate thread
             self._start_state_updates()
-            
-            # Main event loop - get_gamepad() is blocking but yields events
+
+            # Main event loop: read events from a specific gamepad index.
             while self.running:
                 try:
-                    # This will block until an event occurs, but it's in a separate thread
-                    events = get_gamepad()
+                    target_gamepad = self._get_target_gamepad()
+                    if target_gamepad is None:
+                        self.event_received.emit("Controller disconnected!")
+                        logger.warning("No gamepad available for selected index")
+                        self.running = False
+                        break
+
+                    # Blocking read from the selected gamepad only.
+                    events = target_gamepad.read()
                     if not self.running:
                         break
-                        
+
                     for event in events:
                         if not self.running:
                             break
                         self._process_event(event)
-                        
+
                 except UnpluggedError:
                     self.event_received.emit("Controller disconnected!")
                     logger.warning("Controller unplugged during monitoring")
@@ -109,6 +116,16 @@ class InputMonitor(QThread):
         
         update_thread = threading.Thread(target=update_loop, daemon=True)
         update_thread.start()
+
+    def _get_target_gamepad(self):
+        """Get the gamepad object that matches this monitor index."""
+        gamepads = devices.gamepads
+        if not gamepads:
+            return None
+
+        # Keep index in valid range if device ordering/count changes.
+        idx = min(self.controller_index, len(gamepads) - 1)
+        return gamepads[idx]
     
     def _process_event(self, event):
         """Process an input event."""
