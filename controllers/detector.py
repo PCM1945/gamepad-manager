@@ -93,7 +93,7 @@ def _get_connection_type(device):
         return ConnectionType.BLUETOOTH
 
     # Generic wireless receiver naming conventions.
-    if any(k in name for k in ("receiver", "dongle", "wireless adapter", "2.4g", "2.4ghz")):
+    if any(k in name for k in ("receiver", "dongle", "wireless adapter", "2.4g", "2.4ghz")) or pid in WIRELESS_RECEIVER_PIDS:
         return ConnectionType.DONGLE
 
     # Windows HID paths often don't include the literal word 'usb'.
