@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
     QGroupBox,
     QProgressBar,
 )
-from PyQt5.QtCore import Qt, pyqtSlot
+from PyQt5.QtCore import Qt, pyqtSlot, QTimer
 from PyQt5.QtGui import QFont
 import logging
 
@@ -28,6 +28,7 @@ class ControllerEventsWindow(QWidget):
 
         self.init_ui()
         self.setup_connections()
+        QTimer.singleShot(0, self.start_monitoring)
 
     def init_ui(self):
         """Initialize the UI components."""
@@ -183,6 +184,9 @@ class ControllerEventsWindow(QWidget):
 
     def start_monitoring(self):
         """Start monitoring controller inputs."""
+        if self.is_monitoring or self.input_monitor.isRunning():
+            return
+
         logger.info(f"Starting input monitoring for {self.controller.name}")
         self.input_monitor.start()
         self.is_monitoring = True
@@ -191,6 +195,9 @@ class ControllerEventsWindow(QWidget):
 
     def stop_monitoring(self):
         """Stop monitoring controller inputs."""
+        if not self.is_monitoring:
+            return
+
         logger.info(f"Stopping input monitoring for {self.controller.name}")
         self.input_monitor.stop()
         self.is_monitoring = False

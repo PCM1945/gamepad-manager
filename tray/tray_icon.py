@@ -32,7 +32,6 @@ class TrayIcon(QSystemTrayIcon):
             for idx, c in enumerate(controllers):
                 self._add_controller_action(c, idx)
             logger.info(f"Displayed {len(controllers)} controller(s) in tray menu")
-            print(f"{c}, {idx}")
 
         self.menu.addSeparator()
         
@@ -146,7 +145,11 @@ class TrayIcon(QSystemTrayIcon):
                 del self.events_windows[controller_key]
         
         # Create new input monitor and events window
-        input_monitor = InputMonitor(controller_index)
+        input_monitor = InputMonitor(
+            controller_index=controller_index,
+            controller_name=controller.name,
+            controller_type=controller.type.value,
+        )
         events_window = ControllerEventsWindow(controller, input_monitor)
         
         # Store reference to prevent garbage collection
