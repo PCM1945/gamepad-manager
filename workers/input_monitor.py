@@ -41,14 +41,18 @@ class InputMonitor(QThread):
             1: "Circle",
             2: "Square",
             3: "Triangle",
-            4: "L1",
-            5: "R1",
-            6: "Share",
-            7: "Options",
-            8: "L3",
-            9: "R3",
-            10: "PS",
-            11: "Touchpad",
+            4: "Share",
+            5: "Touchpad",
+            6: "Options",
+            7: "L3",
+            8: "R3",
+            9: "L1",
+            10: "R1",
+            11: "D-UP",
+            12: "D-Down",
+            13: "D-Left",
+            14: "D-Right",
+            15: "Touchpad",
         },
         "nintendo": {
             0: "B",
@@ -62,7 +66,11 @@ class InputMonitor(QThread):
             8: "Right Stick",
             9: "L",
             10: "R",
-            11: "Capture",
+            11: "D-Up",
+            12: "D-Down",
+            13: "D-Left",
+            14: "D-Right",
+            15: 'Capture'
         },
     }
     
@@ -81,6 +89,12 @@ class InputMonitor(QThread):
             "right_stick": (0, 0),
             "left_trigger": 0,
             "right_trigger": 0,
+            "dpad": {
+                "up": False,
+                "down": False,
+                "left": False,
+                "right": False,
+            },
         }
         self._active_joystick = None
         self._active_joystick_index = None
@@ -136,6 +150,7 @@ class InputMonitor(QThread):
 
         last_axes = {}
         last_buttons = set()
+        last_hat = (0, 0)
 
         while self.running:
             pygame.event.pump()
@@ -162,10 +177,19 @@ class InputMonitor(QThread):
             left_x, left_y = self._apply_radial_deadzone(left_x, left_y, self.STICK_DEADZONE)
             right_x, right_y = self._apply_radial_deadzone(right_x, right_y, self.STICK_DEADZONE)
 
+            hat_x, hat_y = joy.get_hat(0) if joy.get_numhats() > 0 else (0, 0)
+            dpad_state = {
+                "up": hat_y > 0,
+                "down": hat_y < 0,
+                "left": hat_x < 0,
+                "right": hat_x > 0,
+            }
+
             self._current_state["left_stick"] = (left_x, left_y)
             self._current_state["right_stick"] = (right_x, right_y)
             self._current_state["left_trigger"] = left_trigger
             self._current_state["right_trigger"] = right_trigger
+            self._current_state["dpad"] = dpad_state
 
             axis_snapshot = {
                 "LX": left_x,
@@ -189,6 +213,17 @@ class InputMonitor(QThread):
             #for released in sorted(last_buttons - current_buttons):
                 #self.event_received.emit(f"Button {released}-{self._button_name(released)} released")
             last_buttons = current_buttons
+
+            if (hat_x, hat_y) != last_hat:
+                if dpad_state["up"]:
+                    self.event_received.emit("D-pad UP pressed")
+                if dpad_state["down"]:
+                    self.event_received.emit("D-pad DOWN pressed")
+                if dpad_state["left"]:
+                    self.event_received.emit("D-pad LEFT pressed")
+                if dpad_state["right"]:
+                    self.event_received.emit("D-pad RIGHT pressed")
+                last_hat = (hat_x, hat_y)
 
             self._current_state["buttons"] = {self._button_name(idx) for idx in current_buttons}
             time.sleep(0.01)
@@ -332,7 +367,8 @@ class InputMonitor(QThread):
                 "left_stick": self._current_state["left_stick"],
                 "right_stick": self._current_state["right_stick"],
                 "left_trigger": self._current_state["left_trigger"],
-                "right_trigger": self._current_state["right_trigger"]
+                "right_trigger": self._current_state["right_trigger"],
+                "dpad": dict(self._current_state["dpad"]),
             }
             self.state_updated.emit(state)
         except Exception as e:
